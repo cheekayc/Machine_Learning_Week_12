@@ -1,0 +1,107 @@
+---
+title: "Missing Data Exploration"
+author: "JAS"
+date: " "
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This code can be used to explore missing data. It relies on two primary packages, finalfit and mice, and uses data from a third package VIM. They should be installed before using this code. This code will create plots of missingness to visualize patterns as well as check for associations between missing and observed data. This code is based on a tutorial from the finalfit package documentation. It can be found here if you want additional detail https://cran.r-project.org/web/packages/finalfit/vignettes/missing.html
+
+
+```{r packages}
+library(mice)
+library(finalfit)
+library(VIM)
+```
+
+## REQUIRES USER INPUT
+
+Users should store their final dataset to be explored in a data frame called data.withmissing. Replace the built-in dataset sleep used in this chunk to point to an existing file or an existing R data frame. Put the name of your primary outcome variable into the outcome vector. If you want to see the examples I reference, run first with the sleep data (you need the VIM package for that) and then once you see what the code is doing, you can input your data frame.
+
+The sleep dataset is a data frame describing mammalian sleep data. There are 62 observations with 10 variables
+
+Examples:
+Sleep=total sleep time per day
+Exp= sleep exposure scale
+Span=average life-span
+Gest=Gestation time
+Danger= Overall danger (safety of sleeping space)
+Pred=Predation index
+
+
+When you switch to your own data.frame, put in the names of features that you want to explore within the explanatory vector. The dependent variable should be the feature with missing data that you want to compare with the features in the explanatory vector. See the comparison chunk for further detail.
+
+```{r data_setup}
+
+data(sleep)
+data.withmissing<-sleep
+
+
+#To be used when you use missing_compare
+
+#List of features in the data frame that you want to compare by missingness of other feature(s)
+explanatory<-c("Pred", "Exp", "Danger")
+
+#Feature you want to explore missingness of, in relation to values of explanatory features
+dependent<-"Gest"
+
+```
+
+### Create Missing Data Plots to Explore Patterns
+
+missing_plot will create a heat-map like visualization that shows the features missing by observation within your data frame.
+
+missing_pattern will show you the number of observations with a specific missing data pattern. The rows of the visualization are ordered by how common the missing data pattern is within the dataframe. In this example dataset, 42/62 individuals have no missing data. The next most common pattern is to be missing the features Dream and NonD. The function missing_pattern will also output a table with the same information, where 1 means not missing and 0 means missing.
+
+
+
+```{r visualization}
+missing_plot(data.withmissing)
+missing_pattern(data.withmissing)
+```
+
+### Check for associations between missing and observed data
+
+missing_pairs will construct a pair-wise comparison that compares whether individuals with missing data on a given feature have different average values of other features in the data frame. These comparisons are organized into a matrix plot. The row is the feature that is being split into present (blue) or missing (grey). Then the average value for features listed in the columns are shown for each group. If only one is present (blue), it means the row feature has no missing data.
+
+Using this example data: if you look at the 7th row (associated with feature Gest), you can see that individuals with missing data for Gest (grey) have lower average values of Pred, Exp and Danger ( last 3 columns for 7th row). This dataset only has continuous variables so average values is reasonable. If you also have factor variables, those variables will show counts of the different levels. 
+
+missing_compare will allow you to perform a statistical test to see if there is a difference between the average levels of an "explantory variable" by the "dependent variable" where the dependent variable is the feature with missing data. In this first example, I'm testing whether the average value of Pred is different between those whose value for Gest is Not missing or missing. 
+
+If you want to create a table of multple features, you need to create a vector and then use that in the missing_compare function. That is the second set of code within the chunk below. I'm pretty sure you have to look at the features with missing data one at a time. That is, you can't put a vector of features in for the variable that you want to stratify by missingness.
+
+
+```{r comparison}
+missing_pairs(data.withmissing)
+
+missing_compare(data.withmissing, "Gest", "Pred")
+
+missing_compare(data.withmissing, dependent, explanatory)
+
+
+```
+
+### Impute data
+
+```{r}
+
+imp.1<-mice(data.withmissing, meth="pmm", maxit=5, m=2, seed=100)
+
+imp.2<-mice(data.withmissing, meth="rf", ntree=5, m=2, seed=100)
+
+results.0<-lm(BodyWgt~Pred+Dream+Sleep, data=data.withmissing)
+summary(results.0)
+
+results.1<-with(imp.1,lm(BodyWgt~Pred+Dream+Sleep))
+summary(pool(results.1))
+
+results.2<-with(imp.2,lm(BodyWgt~Pred+Dream+Sleep))
+summary(pool(results.2))
+```
+
